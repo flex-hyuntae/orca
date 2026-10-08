@@ -1,6 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { HostedReviewInfo, HostedReviewForBranchArgs } from '../../../../shared/hosted-review'
-import type { AppState } from '../types'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
 import {
   createTestStore,
@@ -72,7 +71,7 @@ describe('worktree remote runtime mutations', () => {
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
       worktreesByRepo: { repo1: [wt] }
-    } as unknown as Partial<AppState>)
+    })
 
     store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
       url: 'https://github.com/acme/orca/pull/42',
@@ -128,7 +127,7 @@ describe('worktree remote runtime mutations', () => {
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
       worktreesByRepo: { repo1: [wt] }
-    } as unknown as Partial<AppState>)
+    })
 
     store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
       url: 'https://github.com/acme/orca/pull/42',
@@ -160,7 +159,7 @@ describe('worktree remote runtime mutations', () => {
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
       worktreesByRepo: { repo1: [wt] }
-    } as unknown as Partial<AppState>)
+    })
 
     store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
       url: 'https://github.com/acme/orca/pull/43',
@@ -207,7 +206,7 @@ describe('worktree remote runtime mutations', () => {
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
       worktreesByRepo: { repo1: [wt] }
-    } as unknown as Partial<AppState>)
+    })
 
     store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
       url: 'https://github.com/acme/orca/pull/42',
@@ -218,7 +217,7 @@ describe('worktree remote runtime mutations', () => {
       worktreesByRepo: {
         repo1: [{ ...wt, linkedPR: null, suppressedGitHubPR: 42 }]
       }
-    } as Partial<AppState>)
+    })
 
     resolveLookup(confirmedReview(42))
     for (let i = 0; i < 6; i++) {
@@ -246,7 +245,7 @@ describe('worktree remote runtime mutations', () => {
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
       worktreesByRepo: { repo1: [wt] }
-    } as unknown as Partial<AppState>)
+    })
 
     store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
       url: 'https://github.com/acme/orca/pull/42',
@@ -308,7 +307,7 @@ describe('worktree remote runtime mutations', () => {
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
       worktreesByRepo: { repo1: [wt] }
-    } as unknown as Partial<AppState>)
+    })
 
     store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
       url: 'https://github.com/acme/orca/pull/42',
@@ -319,7 +318,7 @@ describe('worktree remote runtime mutations', () => {
 
     store.setState({
       worktreesByRepo: { repo1: [{ ...wt, linkedPR: 7 }] }
-    } as Partial<AppState>)
+    })
 
     resolveLookup(confirmedReview(42))
     for (let i = 0; i < 6; i++) {
@@ -357,7 +356,7 @@ describe('worktree remote runtime mutations', () => {
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
       worktreesByRepo: { repo1: [wt] }
-    } as unknown as Partial<AppState>)
+    })
 
     store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
       url: 'https://github.com/acme/orca/pull/42',
@@ -376,7 +375,7 @@ describe('worktree remote runtime mutations', () => {
 
     store.setState({
       worktreesByRepo: { repo1: [{ ...wt, linkedPR: 7 }] }
-    } as Partial<AppState>)
+    })
 
     resolvePushTarget({
       baseBranch: 'main',
@@ -409,7 +408,7 @@ describe('worktree remote runtime mutations', () => {
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
       worktreesByRepo: { repo1: [wt] }
-    } as unknown as Partial<AppState>)
+    })
 
     store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
       url: 'https://github.com/acme/orca/pull/1',
@@ -443,7 +442,7 @@ describe('worktree remote runtime mutations', () => {
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
       worktreesByRepo: { repo1: [wt] }
-    } as unknown as Partial<AppState>)
+    })
 
     store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
       url: 'https://github.com/acme/docs/pull/42',
