@@ -135,9 +135,12 @@ function describeSleepFailure(error: unknown): string {
   )
 }
 
-export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise<void> {
+/** Resolves with the ids whose teardown failed (already surfaced via toast). */
+export async function runSleepWorktrees(
+  worktreeIds: readonly string[]
+): Promise<ReadonlySet<string>> {
   if (worktreeIds.length === 0) {
-    return
+    return new Set()
   }
   const {
     activeWorktreeId,
@@ -231,4 +234,5 @@ export async function runSleepWorktrees(worktreeIds: readonly string[]): Promise
       }
     )
   }
+  return failedWorktreeIds
 }
