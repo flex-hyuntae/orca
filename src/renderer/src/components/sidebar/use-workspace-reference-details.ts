@@ -1,9 +1,8 @@
 import { useEffect, useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
-import { installWindowVisibilityInterval, isWindowVisible } from '@/lib/window-visibility-interval'
 import { isMacAppDataPath } from '@/lib/passive-macos-app-data-access'
 import { useIsSleepingWorktree } from './use-worktree-sleep-state'
-import { HOSTED_REVIEW_CARD_REFRESH_INTERVAL_MS } from './worktree-card-model'
+import { registerWorkspaceReferenceRefreshRequests } from './workspace-reference-refresh-targets'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import {
@@ -55,42 +54,23 @@ export function useWorkspaceReferenceDetails(
     ) {
       return
     }
-    let controller = new AbortController()
-    const cancelHiddenDemand = (): void => {
-      if (!isWindowVisible()) {
-        controller.abort()
-      }
-    }
-    document.addEventListener('visibilitychange', cancelHiddenDemand)
-    const stop = installWindowVisibilityInterval({
-      run: () => {
-        if (!isWindowVisible()) {
-          return
-        }
-        if (controller.signal.aborted) {
-          controller = new AbortController()
-        }
-        for (const request of requests) {
-          if (
-            request.item.type !== 'issue' &&
-            canReadWorkspaceReferenceReview(request, request.knownProvider)
-          ) {
-            void loadWorkspaceReferenceDetails(
-              { ...request, admissionTier: 'background' },
-              controller.signal
-            )
-          }
-        }
-      },
-      intervalMs: HOSTED_REVIEW_CARD_REFRESH_INTERVAL_MS,
-      jitterOnVisible: true
-    })
-    return () => {
-      stop()
-      controller.abort()
-      document.removeEventListener('visibilitychange', cancelHiddenDemand)
-    }
-  }, [requests, refreshReviews, sleeping, workspace.isArchived, workspace.isBare, repo])
+    return registerWorkspaceReferenceRefreshRequests(
+      workspace.id,
+      requests.filter(
+        (request) =>
+          request.item.type !== 'issue' &&
+          canReadWorkspaceReferenceReview(request, request.knownProvider)
+      )
+    )
+  }, [
+    requests,
+    refreshReviews,
+    sleeping,
+    workspace.id,
+    workspace.isArchived,
+    workspace.isBare,
+    repo
+  ])
   useEffect(() => {
     if (!hoverOpen) {
       return

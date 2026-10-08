@@ -86,6 +86,7 @@ describe('worktree remote runtime mutations', () => {
     expect(readHostedReview).toHaveBeenCalledWith({
       repoPath: '/repos/orca',
       branch: 'feature/pr-link',
+      force: true,
       repoId: 'repo1',
       active: true,
       repoOwnerExecutionHostId: 'local',
@@ -257,6 +258,7 @@ describe('worktree remote runtime mutations', () => {
     expect(readHostedReview).toHaveBeenCalledWith({
       repoPath: '/repos/orca',
       branch: 'feature/pr-link',
+      force: true,
       repoId: 'repo1',
       active: true,
       repoOwnerExecutionHostId: 'local',
@@ -453,6 +455,7 @@ describe('worktree remote runtime mutations', () => {
     expect(readHostedReview).toHaveBeenCalledWith({
       repoPath: '/repos/orca',
       branch: 'feature/pr-link',
+      force: true,
       repoId: 'repo1',
       active: true,
       repoOwnerExecutionHostId: 'local',

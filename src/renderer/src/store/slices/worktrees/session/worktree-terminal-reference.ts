@@ -138,6 +138,7 @@ export function createObserveTerminalGitHubPullRequestLink(
     pending.add(requestKey)
     void readHostedReviewForRepo(repo, state.settings, {
       branch,
+      force: true,
       active: true,
       currentHeadOid: worktree.head,
       linkedGitHubPR: linked ? link.number : null,

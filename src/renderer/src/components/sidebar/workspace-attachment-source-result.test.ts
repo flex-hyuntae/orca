@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type { WorkspaceAttachment, Worktree } from '../../../../shared/worktree/types'
 import { normalizeTaskSourceContext } from '../../../../shared/task-source-context'
-import { getWorkspaceAttachmentKey } from '../../../../shared/workspace-attachments'
 import {
   appendWorkspaceAttachment,
   getWorkspaceAttachmentSourceContext,
@@ -120,11 +119,10 @@ describe('attachment source conversion', () => {
       })
     ).toBe(false)
   })
-  it('enriches a legacy selected review and remaps its active key', () => {
+  it('enriches a legacy review without adding a duplicate', () => {
     const bare: WorkspaceAttachment = { provider: 'github', type: 'pr', number: 7 }
-    const result = appendWorkspaceAttachment([bare], review, getWorkspaceAttachmentKey(bare))
-    expect(result.items).toEqual([review])
-    expect(result.activeKey).toBe(getWorkspaceAttachmentKey(review))
+    const result = appendWorkspaceAttachment([bare], review)
+    expect(result).toEqual([review])
   })
   it('only enriches the same symbolic identifier and URL source', () => {
     const task: WorkspaceAttachment = {

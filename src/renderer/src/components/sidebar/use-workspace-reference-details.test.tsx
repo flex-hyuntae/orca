@@ -1,3 +1,5 @@
+import { useAppStore } from '@/store'
+import { useVisibleHostedReviewRefresh } from '@/app-shell/use-visible-hosted-review-refresh'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -12,18 +14,39 @@ import {
   referenceWorkspace
 } from './workspace-reference-fixtures.test-support'
 
+function useScheduledReferenceDetails(...args: Parameters<typeof useWorkspaceReferenceDetails>) {
+  useVisibleHostedReviewRefresh({ enabled: true })
+  return useWorkspaceReferenceDetails(...args)
+}
+
+vi.mock('@/store', async () => {
+  const { create } = await import('zustand')
+  return { useAppStore: create(() => ({ visibleReviewWorktreeIds: [], activeWorktreeId: null })) }
+})
+vi.mock('@/store/github/visible-hosted-review-refresh-targets', () => ({
+  getVisibleHostedReviewRefreshTargets: () => [],
+  visibleHostedReviewRefreshInputsChanged: () => true
+}))
+
 const mocks = vi.hoisted(() => ({
   sleeping: false,
   visible: true,
+  web: false,
   read: vi.fn<(...args: unknown[]) => Promise<WorkspaceReferenceDetails | null>>()
 }))
 vi.mock('./workspace-reference-detail-read', () => ({ readWorkspaceReferenceDetails: mocks.read }))
 vi.mock('./use-worktree-sleep-state', () => ({ useIsSleepingWorktree: () => mocks.sleeping }))
+vi.mock('@/lib/web-client-location', () => ({ isWebClientLocation: () => mocks.web }))
 
 beforeEach(() => {
   vi.clearAllMocks()
+  useAppStore.setState({
+    visibleReviewWorktreeIds: [referenceWorkspace.id],
+    activeWorktreeId: null
+  })
   mocks.sleeping = false
   mocks.visible = true
+  mocks.web = false
   mocks.read.mockResolvedValue(null)
   Object.defineProperty(document, 'visibilityState', {
     configurable: true,
@@ -34,6 +57,50 @@ beforeEach(() => {
 afterEach(cleanup)
 
 describe('automatic checks for all attached reviews', () => {
+  it('waits for the mounted card to enter the shared visible set', async () => {
+    useAppStore.setState({ visibleReviewWorktreeIds: [] })
+    const workspace = { ...referenceWorkspace, linkedItems: [referenceAttachment()] }
+    renderHook(() => useScheduledReferenceDetails(workspace, referenceRepo, null, false))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(mocks.read).not.toHaveBeenCalled()
+    act(() => useAppStore.setState({ visibleReviewWorktreeIds: [workspace.id] }))
+    await waitFor(() => expect(mocks.read).toHaveBeenCalledOnce())
+  })
+
+  it('limits paired web refreshes to the selected visible workspace', async () => {
+    mocks.web = true
+    const workspace = { ...referenceWorkspace, linkedItems: [referenceAttachment()] }
+    renderHook(() => useScheduledReferenceDetails(workspace, referenceRepo, null, false))
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(mocks.read).not.toHaveBeenCalled()
+    act(() => useAppStore.setState({ activeWorktreeId: workspace.id }))
+    await waitFor(() => expect(mocks.read).toHaveBeenCalledOnce())
+    expect(mocks.read).toHaveBeenCalledWith(
+      expect.objectContaining({ admissionTier: 'interactive' })
+    )
+  })
+
+  it('waits for workspace readiness even when eligible cards are already mounted', async () => {
+    const workspace = { ...referenceWorkspace, linkedItems: [referenceAttachment()] }
+    const hook = renderHook(
+      ({ enabled }) => {
+        useVisibleHostedReviewRefresh({ enabled })
+        return useWorkspaceReferenceDetails(workspace, referenceRepo, null, false)
+      },
+      { initialProps: { enabled: false } }
+    )
+    await act(async () => {
+      await Promise.resolve()
+    })
+    expect(mocks.read).not.toHaveBeenCalled()
+    hook.rerender({ enabled: true })
+    await waitFor(() => expect(mocks.read).toHaveBeenCalledOnce())
+  })
+
   it('loads every eligible review without hover and leaves tasks demand-driven', async () => {
     const items = [
       referenceAttachment(1),
@@ -42,7 +109,7 @@ describe('automatic checks for all attached reviews', () => {
     ]
     const workspace = { ...referenceWorkspace, linkedPR: null, linkedItems: items }
     const hook = renderHook(
-      ({ open }) => useWorkspaceReferenceDetails(workspace, referenceRepo, null, open),
+      ({ open }) => useScheduledReferenceDetails(workspace, referenceRepo, null, open),
       { initialProps: { open: false } }
     )
     await waitFor(() => expect(mocks.read).toHaveBeenCalledTimes(2))
@@ -66,7 +133,7 @@ describe('automatic checks for all attached reviews', () => {
         isArchived: condition === 'archived',
         isBare: condition === 'bare'
       }
-      renderHook(() => useWorkspaceReferenceDetails(workspace, referenceRepo, null, false))
+      renderHook(() => useScheduledReferenceDetails(workspace, referenceRepo, null, false))
       await act(async () => {
         await Promise.resolve()
       })
@@ -88,7 +155,7 @@ describe('automatic checks for all attached reviews', () => {
       linkedPR: null,
       linkedItems: [compatible, foreign, gitlab]
     }
-    renderHook(() => useWorkspaceReferenceDetails(workspace, referenceRepo, null, false))
+    renderHook(() => useScheduledReferenceDetails(workspace, referenceRepo, null, false))
     await waitFor(() => expect(mocks.read).toHaveBeenCalledTimes(1))
     expect(mocks.read).toHaveBeenCalledWith(expect.objectContaining({ item: compatible }))
   })
@@ -103,7 +170,7 @@ describe('automatic checks for all attached reviews', () => {
       const items = [20, 21, 22, 23, 24].map((number) => referenceAttachment(number))
       const workspace = { ...referenceWorkspace, linkedPR: null, linkedItems: items }
       const hook = renderHook(() =>
-        useWorkspaceReferenceDetails(workspace, referenceRepo, null, false)
+        useScheduledReferenceDetails(workspace, referenceRepo, null, false)
       )
       await waitFor(() => expect(mocks.read).toHaveBeenCalledTimes(3))
       if (action === 'hide') {
@@ -132,7 +199,7 @@ describe('automatic checks for all attached reviews', () => {
     const item = referenceAttachment(1)
     const workspace = { ...referenceWorkspace, linkedPR: 1, linkedItems: [item] }
     const hook = renderHook(() =>
-      useWorkspaceReferenceDetails(workspace, referenceRepo, referenceReview(1), false)
+      useScheduledReferenceDetails(workspace, referenceRepo, referenceReview(1), false)
     )
     await waitFor(() => expect(mocks.read).toHaveBeenCalledTimes(1))
     await waitFor(() =>

@@ -227,6 +227,39 @@ describe('workspace linked work editor', () => {
     await save()
     expect(updateWorktreeMeta.mock.calls[0]?.[1]).toEqual({})
   })
+  it('unlinks a review without overriding another client’s concurrently selected review', async () => {
+    const original = openDialog({
+      linkedPR: 1,
+      linkedItems: [
+        { provider: 'github', type: 'pr', number: 1 },
+        { provider: 'github', type: 'pr', number: 2 }
+      ]
+    })
+    fireEvent.click(screen.getByRole('button', { name: 'Unlink PR #1' }))
+    act(() =>
+      useAppStore.setState({
+        worktreesByRepo: {
+          repo: [
+            {
+              ...original,
+              linkedPR: 3,
+              linkedItems: [
+                ...(original.linkedItems ?? []),
+                { provider: 'github', type: 'pr', number: 3 }
+              ]
+            }
+          ]
+        }
+      })
+    )
+    await save()
+    expect(updateWorktreeMeta.mock.calls[0]?.[1]).toEqual({
+      linkedItems: [
+        { provider: 'github', type: 'pr', number: 2 },
+        { provider: 'github', type: 'pr', number: 3 }
+      ]
+    })
+  })
   it('keeps background additions while applying a draft removal', async () => {
     const original = openDialog({ linkedIssue: 1 })
     fireEvent.click(screen.getByRole('button', { name: 'Unlink Issue #1' }))

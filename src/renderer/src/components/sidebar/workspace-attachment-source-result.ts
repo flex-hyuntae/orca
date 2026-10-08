@@ -10,7 +10,6 @@ import { parseLinearIssueInput } from '../../../../shared/linear/links'
 import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
 import { parseGitLabIssueOrMRLink } from '../../../../shared/new-workspace/gitlab-links'
 import {
-  getWorkspaceAttachmentKey,
   getWorkspaceAttachmentUrlScope,
   normalizeWorkspaceAttachments
 } from '../../../../shared/workspace-attachments'
@@ -179,13 +178,7 @@ export function isWorkspaceAttachmentLinked(
 
 export function appendWorkspaceAttachment(
   items: readonly WorkspaceAttachment[],
-  item: WorkspaceAttachment,
-  activeKey: string | null
-): { items: WorkspaceAttachment[]; activeKey: string | null } {
-  const selected = items.find((candidate) => getWorkspaceAttachmentKey(candidate) === activeKey)
-  const normalized = normalizeWorkspaceAttachments([...items, item])
-  const active = selected
-    ? normalized.find((candidate) => matchesWorkspaceAttachmentIdentity(candidate, selected))
-    : null
-  return { items: normalized, activeKey: active ? getWorkspaceAttachmentKey(active) : activeKey }
+  item: WorkspaceAttachment
+): WorkspaceAttachment[] {
+  return normalizeWorkspaceAttachments([...items, item])
 }

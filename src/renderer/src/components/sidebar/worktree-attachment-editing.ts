@@ -144,10 +144,8 @@ export function buildWorkspaceAttachmentEdits(args: {
   initial: readonly WorkspaceAttachment[]
   draft: readonly WorkspaceAttachment[]
   live: Worktree | undefined
-  activeReviewKey: string | null
-  initialActiveReviewKey: string | null
 }): Partial<WorktreeMeta> {
-  const { initial, draft, live, activeReviewKey, initialActiveReviewKey } = args
+  const { initial, draft, live } = args
   const initialKeys = new Set(initial.map(getWorkspaceAttachmentKey))
   const draftKeys = new Set(draft.map(getWorkspaceAttachmentKey))
   const removedKeys = new Set([...initialKeys].filter((key) => !draftKeys.has(key)))
@@ -165,35 +163,6 @@ export function buildWorkspaceAttachmentEdits(args: {
       getWorkspaceAttachments(live ?? {}),
       draft
     )
-  }
-  if (activeReviewKey !== initialActiveReviewKey && activeReviewKey === null) {
-    for (const slot of [
-      'linkedPR',
-      'linkedGitLabMR',
-      'linkedBitbucketPR',
-      'linkedAzureDevOpsPR',
-      'linkedGiteaPR'
-    ] as const) {
-      updates[slot] = null
-    }
-  }
-  if (activeReviewKey !== initialActiveReviewKey && activeReviewKey) {
-    const active = draft.find((item) => getWorkspaceAttachmentKey(item) === activeReviewKey)
-    if (active?.provider === 'github') {
-      updates.linkedPR = active.number
-    }
-    if (active?.provider === 'gitlab') {
-      updates.linkedGitLabMR = active.number
-    }
-    if (active?.provider === 'bitbucket') {
-      updates.linkedBitbucketPR = active.number
-    }
-    if (active?.provider === 'azure-devops') {
-      updates.linkedAzureDevOpsPR = active.number
-    }
-    if (active?.provider === 'gitea') {
-      updates.linkedGiteaPR = active.number
-    }
   }
   return updates
 }

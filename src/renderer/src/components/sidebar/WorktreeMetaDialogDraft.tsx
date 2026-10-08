@@ -27,10 +27,7 @@ import { getWorkspaceAttachments } from '../../../../shared/workspace-attachment
 import type { WorkspaceAttachment } from '../../../../shared/worktree/types'
 import { WorktreeDisplayNameField } from './WorktreeDisplayNameField'
 import { WorktreeLinkedItemsField } from './WorktreeLinkedItemsField'
-import {
-  buildWorkspaceAttachmentEdits,
-  getActiveWorkspaceReviewKey
-} from './worktree-attachment-editing'
+import { buildWorkspaceAttachmentEdits } from './worktree-attachment-editing'
 import { resizeCommentTextarea } from './worktree-comment-textarea-sizing'
 import { isImeOwnedKeyboardEvent } from '@/lib/ime-composition-keyboard-event'
 
@@ -75,13 +72,11 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
   const [displayNameInput, setDisplayNameInput] = useState('')
   const [commentInput, setCommentInput] = useState('')
   const [items, setItems] = useState<WorkspaceAttachment[]>([])
-  const [activeReviewKey, setActiveReviewKey] = useState<string | null>(null)
   const [initial, setInitial] = useState<{
     displayName: string
     comment: string
     items: WorkspaceAttachment[]
-    activeReviewKey: string | null
-  }>({ displayName: '', comment: '', items: [], activeReviewKey: null })
+  }>({ displayName: '', comment: '', items: [] })
   const [notesOpen, setNotesOpen] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saveError, setSaveError] = useState<string | null>(null)
@@ -103,13 +98,11 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
         ? modalData.currentComment
         : (worktree?.comment ?? '')
     const attachments = getWorkspaceAttachments(worktree ?? {})
-    const active = getActiveWorkspaceReviewKey(worktree)
     setDisplayNameInput(displayName)
     setCommentInput(comment)
     setItems(attachments)
-    setActiveReviewKey(active)
     // Freeze the baseline so background additions survive a comment-only save.
-    setInitial({ displayName, comment, items: attachments, activeReviewKey: active })
+    setInitial({ displayName, comment, items: attachments })
     setSaveError(null)
     setNotesOpen(Boolean(comment.trim()) || focusField === 'comment')
   }
@@ -130,9 +123,7 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
         ...buildWorkspaceAttachmentEdits({
           initial: initial.items,
           draft: items,
-          live: worktree,
-          activeReviewKey,
-          initialActiveReviewKey: initial.activeReviewKey
+          live: worktree
         })
       }
       const result =
@@ -175,7 +166,6 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
     initial,
     items,
     worktree,
-    activeReviewKey,
     executionHostId,
     suppressHostedReviewRefresh,
     updateWorktreeMeta,
@@ -256,8 +246,6 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
             items={items}
             onItemsChange={setItems}
             onSave={handleSave}
-            activeReviewKey={activeReviewKey}
-            onActiveReviewChange={setActiveReviewKey}
             repo={repo}
             workspace={worktree}
             isFolderWorkspace={isFolderWorkspace}
@@ -328,13 +316,6 @@ const WorktreeMetaDialogDraft = React.memo(function WorktreeMetaDialogDraft() {
                     delete event.currentTarget.dataset.imeComposing
                   }}
                   onKeyDown={(event) => {
-                    if (
-                      commentIme.ownsKeyDown(event) ||
-                      textareaRef.current?.dataset.imeComposing === 'true' ||
-                      isImeOwnedKeyboardEvent(event)
-                    ) {
-                      return
-                    }
                     const plainEnter =
                       event.key === 'Enter' &&
                       !event.shiftKey &&

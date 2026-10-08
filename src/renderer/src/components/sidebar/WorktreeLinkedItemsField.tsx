@@ -21,8 +21,6 @@ type Props = {
   items: readonly WorkspaceAttachment[]
   onItemsChange: (items: WorkspaceAttachment[]) => void
   onSave: () => void
-  activeReviewKey: string | null
-  onActiveReviewChange: (key: string | null) => void
   repo?: Repo
   workspace?: Worktree
   isFolderWorkspace?: boolean
@@ -36,8 +34,6 @@ export function WorktreeLinkedItemsField({
   items,
   onItemsChange,
   onSave,
-  activeReviewKey,
-  onActiveReviewChange,
   repo,
   workspace,
   isFolderWorkspace = false,
@@ -96,23 +92,13 @@ export function WorktreeLinkedItemsField({
       setError(translate('workspace.links.duplicate', 'This link is already attached.'))
       return false
     }
-    const next = appendWorkspaceAttachment(items, item, activeReviewKey)
-    onItemsChange(next.items)
-    if (!isFolderWorkspace && canUseWorkspaceReviewForChecks(item, repo) && !next.activeKey) {
-      onActiveReviewChange(getWorkspaceAttachmentKey(item))
-    } else if (next.activeKey !== activeReviewKey) {
-      onActiveReviewChange(next.activeKey)
-    }
+    onItemsChange(appendWorkspaceAttachment(items, item))
     setError(null)
     return true
   }
   const remove = (key: string): void => {
     const next = items.filter((item) => getWorkspaceAttachmentKey(item) !== key)
     onItemsChange(next)
-    if (activeReviewKey === key) {
-      const review = next.find((item) => canUseWorkspaceReviewForChecks(item, repo))
-      onActiveReviewChange(review ? getWorkspaceAttachmentKey(review) : null)
-    }
   }
   const groups = [
     {

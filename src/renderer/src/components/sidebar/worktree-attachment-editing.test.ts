@@ -50,38 +50,40 @@ describe('workspace attachment editing', () => {
     const updates = buildWorkspaceAttachmentEdits({
       initial,
       draft,
-      live,
-      activeReviewKey: null,
-      initialActiveReviewKey: null
+      live
     })
     expect(updates.linkedItems?.[0]).toMatchObject({ title: 'Fresh', origins: draft[0].origins })
     expect(
       buildWorkspaceAttachmentEdits({
         initial,
         draft,
-        live: makeWorktree({ id: 'repo::/work', repoId: 'repo', linkedItems: [] }),
-        activeReviewKey: null,
-        initialActiveReviewKey: null
+        live: makeWorktree({ id: 'repo::/work', repoId: 'repo', linkedItems: [] })
       }).linkedItems
     ).toEqual([])
   })
-  it('writes an explicit empty selection when the only eligible review is removed', () => {
+  it('removes a review through the collection without emitting a scalar selection', () => {
     const mr: WorkspaceAttachment = { provider: 'gitlab', type: 'mr', number: 2 }
     const initial = [review, mr]
     const updates = buildWorkspaceAttachmentEdits({
       initial,
       draft: [mr],
-      live: makeWorktree({ id: 'repo::/work', repoId: 'repo', linkedItems: initial, linkedPR: 1 }),
-      activeReviewKey: null,
-      initialActiveReviewKey: 'old-active'
+      live: makeWorktree({ id: 'repo::/work', repoId: 'repo', linkedItems: initial, linkedPR: 1 })
     })
-    expect(updates).toMatchObject({
-      linkedItems: [mr],
-      linkedPR: null,
-      linkedGitLabMR: null,
-      linkedBitbucketPR: null,
-      linkedAzureDevOpsPR: null,
-      linkedGiteaPR: null
+    expect(updates).toEqual({ linkedItems: [mr] })
+  })
+  it('keeps a concurrent selected review when a draft removes the previous primary', () => {
+    const second = { ...review, number: 2 }
+    const third = { ...review, number: 3 }
+    const updates = buildWorkspaceAttachmentEdits({
+      initial: [review, second],
+      draft: [second],
+      live: makeWorktree({
+        id: 'repo::/work',
+        repoId: 'repo',
+        linkedPR: 3,
+        linkedItems: [review, second, third]
+      })
     })
+    expect(updates).toEqual({ linkedItems: [second, third] })
   })
 })
