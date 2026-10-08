@@ -1,3 +1,4 @@
+import { getWorkspaceAttachments } from '../../../shared/workspace-attachments'
 import { parseGitHubIssueOrPRLink, parseGitHubIssueOrPRNumber } from '@/lib/github-links'
 import {
   getLinkedWorkItemSuggestedName,
@@ -211,7 +212,9 @@ export function createWorktreeJumpPaletteWorktreeHandler({
       const matches = allWorktrees.filter(
         (worktree) =>
           !worktree.isArchived &&
-          (worktree.linkedIssue === ghNumber || worktree.linkedPR === ghNumber)
+          getWorkspaceAttachments(worktree).some(
+            (item) => item.provider === 'github' && item.number === ghNumber
+          )
       )
       const activeMatch =
         matches.find((worktree) => worktree.repoId === state.activeRepoId) ?? matches[0]

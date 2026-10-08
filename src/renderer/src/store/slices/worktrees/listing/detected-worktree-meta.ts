@@ -28,6 +28,7 @@ let floatingWorkspaceWorktreeCache: { path: string; worktree: Worktree } | null 
 
 import { worktreeRowMatchesMetaHost } from './worktree-meta-host-match'
 import { branchName } from '@/lib/git-utils'
+import { normalizeWorkspaceAttachmentUpdate } from '../../../../../../shared/workspace-attachments'
 
 export function applyDetectedWorktreeUpdates(
   detectedWorktreesByRepo: AppState['detectedWorktreesByRepo'],
@@ -48,7 +49,7 @@ export function applyDetectedWorktreeUpdates(
       }
       repoChanged = true
       changed = true
-      const next = { ...worktree, ...updates }
+      const next = { ...worktree, ...normalizeWorkspaceAttachmentUpdate(worktree, updates) }
       if (updates.displayNameIsPinned !== undefined) {
         next.displayNameMode = updates.displayNameIsPinned ? 'fixed' : 'automatic'
         if (updates.displayNameIsPinned === false && !updates.displayName?.trim()) {
@@ -163,6 +164,9 @@ export function getFolderWorkspaceMetaUpdates(
     | 'pendingFirstAgentMessageRename'
     | 'firstAgentMessageRenameError'
     | 'diffComments'
+    | 'linkedItems'
+    | 'linkedTask'
+    | 'linkedTaskSourceContext'
   >
 > {
   const next: Partial<
@@ -181,6 +185,9 @@ export function getFolderWorkspaceMetaUpdates(
       | 'pendingFirstAgentMessageRename'
       | 'firstAgentMessageRenameError'
       | 'diffComments'
+      | 'linkedItems'
+      | 'linkedTask'
+      | 'linkedTaskSourceContext'
     >
   > = {}
   if (updates.displayName !== undefined) {
@@ -224,6 +231,15 @@ export function getFolderWorkspaceMetaUpdates(
   }
   if (updates.diffComments !== undefined) {
     next.diffComments = updates.diffComments
+  }
+  if (updates.linkedItems !== undefined) {
+    next.linkedItems = updates.linkedItems
+  }
+  if (updates.linkedWorkItem !== undefined) {
+    next.linkedTask = updates.linkedWorkItem
+  }
+  if (updates.linkedTaskSourceContext !== undefined) {
+    next.linkedTaskSourceContext = updates.linkedTaskSourceContext
   }
   return next
 }

@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeClientTarget } from '../../../../runtime/runtime-rpc-client'
-import { WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY } from '../../../../../../shared/protocol-version'
+import {
+  WORKTREE_GITHUB_PR_SUPPRESSION_RUNTIME_CAPABILITY,
+  WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY,
+  WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY
+} from '../../../../../../shared/protocol-version'
 import { persistWorktreeMeta } from './worktree-meta-persist'
+import { createGlobalSettingsFixture } from '../../../../../../shared/global-settings-test-fixture'
 
 const mocks = vi.hoisted(() => ({
   assertCapability: vi.fn(),
@@ -46,6 +51,35 @@ describe('persistWorktreeMeta GitHub PR suppression compatibility', () => {
       'Update the remote runtime to unlink GitHub pull requests'
     )
     expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+  })
+
+  it('rejects attachment writes before an older host can silently drop them', async () => {
+    mocks.assertCapability.mockRejectedValue(new Error('update required'))
+    await expect(
+      persistWorktreeMeta(createGlobalSettingsFixture(), 'repo::/feature', { linkedItems: [] })
+    ).rejects.toThrow('update required')
+    expect(mocks.assertCapability).toHaveBeenCalledWith(
+      'env-1',
+      WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY,
+      'Update the remote runtime to change workspace links'
+    )
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
+  })
+
+  it('sends the complete collection to a capable host', async () => {
+    const linkedItems = [
+      { provider: 'github', type: 'pr', number: 42 },
+      { provider: 'gitlab', type: 'mr', number: 7 }
+    ] as const
+    await persistWorktreeMeta(createGlobalSettingsFixture(), 'repo::/feature', {
+      linkedItems: [...linkedItems]
+    })
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      mocks.target,
+      'worktree.set',
+      { worktree: 'id:repo::/feature', linkedItems },
+      { timeoutMs: 15_000 }
+    )
   })
 
   it('sends positive suppression writes to capable hosts', async () => {
@@ -107,5 +141,44 @@ describe('persistWorktreeMeta GitHub PR suppression compatibility', () => {
       updates: { suppressedGitHubPR: 42 }
     })
     expect(mocks.assertCapability).not.toHaveBeenCalled()
+  })
+  it('gates and forwards the atomic collection snapshot', async () => {
+    await persistWorktreeMeta(
+      createGlobalSettingsFixture(),
+      'repo::/feature',
+      { linkedItems: [] },
+      undefined,
+      undefined,
+      []
+    )
+    expect(mocks.assertCapability).toHaveBeenCalledWith(
+      'env-1',
+      WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY,
+      'Update the remote runtime to safely change workspace links'
+    )
+    expect(mocks.callRuntimeRpc).toHaveBeenCalledWith(
+      mocks.target,
+      'worktree.set',
+      {
+        worktree: 'id:repo::/feature',
+        linkedItems: [],
+        linkedItemsBase: [],
+        linkedItemsSelectionChanged: false
+      },
+      { timeoutMs: 15_000 }
+    )
+    mocks.callRuntimeRpc.mockClear()
+    mocks.assertCapability.mockRejectedValue(new Error('atomic support required'))
+    await expect(
+      persistWorktreeMeta(
+        createGlobalSettingsFixture(),
+        'repo::/feature',
+        { linkedItems: [] },
+        undefined,
+        undefined,
+        []
+      )
+    ).rejects.toThrow('atomic support required')
+    expect(mocks.callRuntimeRpc).not.toHaveBeenCalled()
   })
 })

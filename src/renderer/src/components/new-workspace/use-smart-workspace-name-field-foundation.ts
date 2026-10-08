@@ -10,6 +10,7 @@ import type {
 } from './smart-workspace-name-field-model'
 import { useJiraSourceConnection } from './use-jira-source-connection'
 import { useJiraUrlSource } from './use-jira-url-source'
+import { useLinearSourceConnection } from './use-linear-source-connection'
 import { useSmartWorkspaceFieldAvailability } from './use-smart-workspace-field-availability'
 import { useSmartWorkspaceNameFieldState } from './use-smart-workspace-name-field-state'
 
@@ -34,8 +35,8 @@ export function useSmartWorkspaceNameFieldFoundation(
     fetchWorkItemsAcrossRepos,
     fetchLinearIssue,
     getCachedWorkItems,
-    linearStatus,
-    linearStatusChecked,
+    linearStatus: defaultLinearStatus,
+    linearStatusChecked: defaultLinearStatusChecked,
     listLinearIssues,
     preflightStatus,
     preflightStatusChecked,
@@ -88,14 +89,16 @@ export function useSmartWorkspaceNameFieldFoundation(
   }, [githubSourceContextOverride, selectedRepo])
   const gitlabSourceContext = useMemo(
     () =>
-      selectedRepo
-        ? buildTaskSourceContextFromRepo({
-            provider: 'gitlab',
-            projectId: selectedRepo.id,
-            repo: selectedRepo
-          })
-        : null,
-    [selectedRepo]
+      props.gitlabSourceContext?.provider === 'gitlab'
+        ? props.gitlabSourceContext
+        : selectedRepo
+          ? buildTaskSourceContextFromRepo({
+              provider: 'gitlab',
+              projectId: selectedRepo.id,
+              repo: selectedRepo
+            })
+          : null,
+    [props.gitlabSourceContext, selectedRepo]
   )
   const repoBackedSearchTargets = useMemo<RepoBackedSearchTarget[]>(
     () =>
@@ -127,16 +130,29 @@ export function useSmartWorkspaceNameFieldFoundation(
   )
   const linearSourceContext = useMemo(
     () =>
-      selectedRepo
-        ? buildTaskSourceContextFromRepo({
-            provider: 'linear',
-            projectId: selectedRepo.id,
-            repo: selectedRepo
-          })
-        : null,
-    [selectedRepo]
+      props.linearSourceContext?.provider === 'linear'
+        ? props.linearSourceContext
+        : selectedRepo
+          ? buildTaskSourceContextFromRepo({
+              provider: 'linear',
+              projectId: selectedRepo.id,
+              repo: selectedRepo
+            })
+          : null,
+    [props.linearSourceContext, selectedRepo]
   )
   const state = useSmartWorkspaceNameFieldState(textOnly, value)
+  const hasLinearSourceOverride = props.linearSourceContext?.provider === 'linear'
+  const linearConnection = useLinearSourceConnection({
+    enabled: hasLinearSourceOverride && !disabled && !textOnly,
+    sourceContext: hasLinearSourceOverride ? linearSourceContext : null
+  })
+  const linearStatus = hasLinearSourceOverride
+    ? (linearConnection.status ?? { connected: false, viewer: null })
+    : defaultLinearStatus
+  const linearStatusChecked = hasLinearSourceOverride
+    ? linearConnection.loaded
+    : defaultLinearStatusChecked
   const jiraConnection = useJiraSourceConnection({
     enabled: !disabled && !textOnly && jiraSourceContext !== null,
     sourceContext: jiraSourceContext
@@ -167,7 +183,8 @@ export function useSmartWorkspaceNameFieldFoundation(
     expectedPreflightContextKey,
     refreshPreflightStatus,
     linearStatus,
-    linearStatusChecked,
+    // Explicit sources load independently instead of refreshing the focused runtime's store.
+    linearStatusChecked: hasLinearSourceOverride || linearStatusChecked,
     checkLinearConnection,
     jiraSourceConnected
   })
@@ -183,6 +200,9 @@ export function useSmartWorkspaceNameFieldFoundation(
     getCachedWorkItems,
     linearStatus,
     linearStatusChecked,
+    linearWorkspaceIdOverride: hasLinearSourceOverride
+      ? (linearStatus.selectedWorkspaceId ?? linearStatus.activeWorkspaceId ?? null)
+      : undefined,
     listLinearIssues,
     searchJiraIssues,
     searchLinearIssues,

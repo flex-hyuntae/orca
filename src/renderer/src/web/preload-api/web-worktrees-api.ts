@@ -1,3 +1,9 @@
+import type { Worktree, WorkspaceAttachment } from '../../../../shared/worktree/types'
+import type { WorkspaceAttachmentMutation } from '../../../../shared/workspace-attachment-mutation'
+import {
+  WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY,
+  WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY
+} from '../../../../shared/protocol-version'
 import type { PreloadApi } from '../../../../preload/api-types'
 import type {
   ForceDeleteWorktreeBranchResult,
@@ -6,15 +12,19 @@ import type {
 import type { WorkspaceLineage, WorktreeLineage } from '../../../../shared/worktree/lineage-types'
 import { readRetiredNameRegistryForRepo } from '../../../../shared/worktree/retired-name-cache'
 import { EMPTY_RETIRED_NAME_REGISTRY } from '../../../../shared/worktree/retired-name-registry'
-import type { Worktree } from '../../../../shared/worktree/types'
 import { worktreeRemovalReplyTimeoutMs } from '../../../../shared/worktree/archive-hook-removal-gate'
 import { toRuntimeWorktreeSelector } from '../../runtime/runtime-worktree-selector'
 import {
+  getRemoteRuntimeStatus,
   callRuntimeResult,
   callRuntimeResultWithOwner,
   withRuntimeWorktreeOwner
 } from './web-runtime-calls'
-import { invalidateRuntimeWorktreeCaches } from './web-runtime-session'
+import {
+  invalidateRuntimeWorktreeCaches,
+  requireActiveEnvironment,
+  assertActiveEnvironment
+} from './web-runtime-session'
 import {
   WEB_RUNTIME_WORKTREE_LIST_LIMIT,
   callRuntimeDetectedWorktrees,
@@ -48,6 +58,9 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
     listDetected: async ({ repoId }) => callRuntimeDetectedWorktrees(repoId),
     listAll: () => listAllRuntimeWorktrees(),
     create: async (args) => {
+      if (args.linkedItems !== undefined) {
+        await assertAttachmentWriteSupported(args)
+      }
       invalidateRuntimeWorktreeCaches()
       const owned = await callRuntimeResultWithOwner<{ worktree: Worktree }>('worktree.create', {
         repo: args.repoId,
@@ -60,6 +73,7 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         branchNameOverride: args.branchNameOverride,
         linkedIssue: args.linkedIssue,
         linkedPR: args.linkedPR,
+        ...(args.linkedItems !== undefined ? { linkedItems: args.linkedItems } : {}),
         linkedLinearIssue: args.linkedLinearIssue,
         linkedLinearIssueWorkspaceId: args.linkedLinearIssueWorkspaceId,
         linkedLinearIssueOrganizationUrlKey: args.linkedLinearIssueOrganizationUrlKey,
@@ -157,6 +171,9 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
         ...(hostId ? { hostId } : {})
       }),
     updateMeta: async ({ worktreeId, updates }) => {
+      if (updates.linkedItems !== undefined) {
+        await assertAttachmentWriteSupported(updates)
+      }
       const rpcUpdates =
         Object.hasOwn(updates, 'pushTarget') && updates.pushTarget === undefined
           ? { ...updates, pushTarget: null }
@@ -193,5 +210,20 @@ export function createWorktreesApi(): NonNullable<Partial<PreloadApi>['worktrees
     onHeadIdentitiesChanged: () => noopUnsubscribe,
     onBaseStatus: () => noopUnsubscribe,
     onRemoteBranchConflict: () => noopUnsubscribe
+  }
+}
+
+async function assertAttachmentWriteSupported(
+  updates: { linkedItems?: WorkspaceAttachment[] } & WorkspaceAttachmentMutation
+): Promise<void> {
+  const environmentId = requireActiveEnvironment().id
+  const status = await getRemoteRuntimeStatus()
+  assertActiveEnvironment(environmentId)
+  if (
+    !status.capabilities?.includes(WORKTREE_LINKED_ITEMS_RUNTIME_CAPABILITY) ||
+    (updates.linkedItemsBase !== undefined &&
+      !status.capabilities?.includes(WORKTREE_LINKED_ITEMS_DELTA_RUNTIME_CAPABILITY))
+  ) {
+    throw new Error('Update the remote runtime to safely change workspace links')
   }
 }

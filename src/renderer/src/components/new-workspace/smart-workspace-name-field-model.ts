@@ -26,6 +26,8 @@ export type SmartWorkspaceNameFieldProps = {
   onOpenJiraSettings?: () => void
   selectedSource: SmartWorkspaceNameSelection | null
   onClearSelectedSource: () => void
+  gitlabSourceContext?: TaskSourceContext | null
+  linearSourceContext?: TaskSourceContext | null
   githubSourceContext?: TaskSourceContext | null
   jiraSourceContext?: TaskSourceContext | null
   inputRef?: React.RefObject<HTMLInputElement | null>

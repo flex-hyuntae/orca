@@ -46,6 +46,7 @@ export function useSmartWorkspaceSecondarySearches({
     searchLinearIssues,
     listLinearIssues,
     linearSourceContext,
+    linearWorkspaceIdOverride,
     setLinearIssues,
     setLinearLoading,
     setSettledLinearUrlQuery,
@@ -171,13 +172,21 @@ export function useSmartWorkspaceSecondarySearches({
             getSmartWorkspaceLinearSearchQuery(trimmed),
             RESULT_LIMIT,
             {
-              sourceContext: linearSourceContext
+              sourceContext: linearSourceContext,
+              ...(linearWorkspaceIdOverride !== undefined
+                ? { workspaceId: linearWorkspaceIdOverride }
+                : {})
             }
           )
         : linearReadMethodsRef.current
             .listLinearIssues(
               { kind: 'list', filter: 'assigned', limit: RESULT_LIMIT },
-              { sourceContext: linearSourceContext }
+              {
+                sourceContext: linearSourceContext,
+                ...(linearWorkspaceIdOverride !== undefined
+                  ? { workspaceId: linearWorkspaceIdOverride }
+                  : {})
+              }
             )
             .then((result) => result.items)
     void request
@@ -208,6 +217,7 @@ export function useSmartWorkspaceSecondarySearches({
     linearQuery,
     linearScopeSignature,
     linearSourceContext,
+    linearWorkspaceIdOverride,
     linearUrlIntent,
     setSettledLinearUrlQuery,
     shouldQueryLinear

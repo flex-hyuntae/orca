@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { HostedReviewInfo, HostedReviewForBranchArgs } from '../../../../shared/hosted-review'
 import type { AppState } from '../types'
 import { makeWorktree } from './worktrees-slice-test-fixtures'
 import {
@@ -7,6 +8,26 @@ import {
   resetRemoteRuntimeMocks,
   resetWorktreeSliceModuleMemory
 } from './worktrees-slice-test-harness'
+
+function installReviewRead() {
+  const read = vi.fn<(args: HostedReviewForBranchArgs) => Promise<HostedReviewInfo | null>>()
+  Object.defineProperty(window.api, 'hostedReview', {
+    configurable: true,
+    value: { forBranch: read }
+  })
+  return read
+}
+
+const confirmedReview = (number: number): HostedReviewInfo => ({
+  provider: 'github',
+  number,
+  title: 'Confirmed',
+  state: 'open',
+  status: 'success',
+  mergeable: 'MERGEABLE',
+  url: `https://github.com/acme/orca/pull/${number}`,
+  updatedAt: '2026-01-01'
+})
 
 const requestWorktreeBaseFallbackNotice = vi.hoisted(() => vi.fn())
 
@@ -34,7 +55,7 @@ describe('worktree remote runtime mutations', () => {
 
   it('waits for branch confirmation before linking a terminal PR URL for a known push target', async () => {
     const store = createTestStore()
-    const fetchPRForBranch = vi.fn().mockResolvedValue({ number: 42 })
+    const readHostedReview = installReviewRead().mockResolvedValue(confirmedReview(42))
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -50,8 +71,7 @@ describe('worktree remote runtime mutations', () => {
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
-      worktreesByRepo: { repo1: [wt] },
-      fetchPRForBranch
+      worktreesByRepo: { repo1: [wt] }
     } as unknown as Partial<AppState>)
 
     store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
@@ -63,14 +83,18 @@ describe('worktree remote runtime mutations', () => {
     expect(store.getState().worktreesByRepo.repo1[0]?.linkedPR).toBeNull()
     expect(mockApi.worktrees.resolvePrBase).not.toHaveBeenCalled()
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
-    expect(fetchPRForBranch).toHaveBeenCalledWith('/repos/orca', 'feature/pr-link', {
-      force: true,
+    expect(readHostedReview).toHaveBeenCalledWith({
+      repoPath: '/repos/orca',
+      branch: 'feature/pr-link',
       repoId: 'repo1',
-      worktreeId: wt.id,
-      linkedPRNumber: null,
-      fallbackPRNumber: null,
-      fallbackPRSource: 'explicit',
-      reason: 'active'
+      active: true,
+      repoOwnerExecutionHostId: 'local',
+      currentHeadOid: wt.head,
+      linkedGitHubPR: null,
+      linkedGitLabMR: null,
+      linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
+      linkedGiteaPR: null
     })
     for (let i = 0; i < 6; i++) {
       await Promise.resolve()
@@ -79,13 +103,17 @@ describe('worktree remote runtime mutations', () => {
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
       executionHostId: 'local',
-      updates: { linkedPR: 42, suppressedGitHubPR: null }
+      updates: expect.objectContaining({
+        linkedItems: [{ provider: 'github', type: 'pr', number: 42 }],
+        linkedPR: 42,
+        suppressedGitHubPR: null
+      })
     })
   })
 
   it('ignores a terminal URL matching current GitHub PR suppression', () => {
     const store = createTestStore()
-    const fetchPRForBranch = vi.fn().mockResolvedValue({ number: 42 })
+    const readHostedReview = installReviewRead().mockResolvedValue(confirmedReview(42))
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -98,8 +126,7 @@ describe('worktree remote runtime mutations', () => {
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
-      worktreesByRepo: { repo1: [wt] },
-      fetchPRForBranch
+      worktreesByRepo: { repo1: [wt] }
     } as unknown as Partial<AppState>)
 
     store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
@@ -108,13 +135,13 @@ describe('worktree remote runtime mutations', () => {
       number: 42
     })
 
-    expect(fetchPRForBranch).not.toHaveBeenCalled()
+    expect(readHostedReview).not.toHaveBeenCalled()
     expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
 
   it('allows terminal observation of a different PR than the suppressed one', async () => {
     const store = createTestStore()
-    const fetchPRForBranch = vi.fn().mockResolvedValue({ number: 43 })
+    installReviewRead().mockResolvedValue(confirmedReview(43))
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -131,8 +158,7 @@ describe('worktree remote runtime mutations', () => {
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
-      worktreesByRepo: { repo1: [wt] },
-      fetchPRForBranch
+      worktreesByRepo: { repo1: [wt] }
     } as unknown as Partial<AppState>)
 
     store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
@@ -147,16 +173,20 @@ describe('worktree remote runtime mutations', () => {
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
       executionHostId: 'local',
-      updates: { linkedPR: 43, suppressedGitHubPR: null }
+      updates: expect.objectContaining({
+        linkedItems: [{ provider: 'github', type: 'pr', number: 43 }],
+        linkedPR: 43,
+        suppressedGitHubPR: null
+      })
     })
   })
 
   it('rechecks GitHub PR suppression after branch confirmation resolves', async () => {
     const store = createTestStore()
-    let resolveLookup: (value: { number: number } | null) => void = () => {}
-    const fetchPRForBranch = vi.fn(
+    let resolveLookup: (value: HostedReviewInfo | null) => void = () => {}
+    installReviewRead().mockImplementation(
       () =>
-        new Promise<{ number: number } | null>((resolve) => {
+        new Promise<HostedReviewInfo | null>((resolve) => {
           resolveLookup = resolve
         })
     )
@@ -175,8 +205,7 @@ describe('worktree remote runtime mutations', () => {
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
-      worktreesByRepo: { repo1: [wt] },
-      fetchPRForBranch
+      worktreesByRepo: { repo1: [wt] }
     } as unknown as Partial<AppState>)
 
     store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
@@ -190,7 +219,7 @@ describe('worktree remote runtime mutations', () => {
       }
     } as Partial<AppState>)
 
-    resolveLookup({ number: 42 })
+    resolveLookup(confirmedReview(42))
     for (let i = 0; i < 6; i++) {
       await Promise.resolve()
     }
@@ -200,7 +229,7 @@ describe('worktree remote runtime mutations', () => {
 
   it('waits for branch confirmation before linking a same-repo terminal PR URL', async () => {
     const store = createTestStore()
-    const fetchPRForBranch = vi.fn().mockResolvedValue({ number: 42 })
+    const readHostedReview = installReviewRead().mockResolvedValue(confirmedReview(42))
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -215,8 +244,7 @@ describe('worktree remote runtime mutations', () => {
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
-      worktreesByRepo: { repo1: [wt] },
-      fetchPRForBranch
+      worktreesByRepo: { repo1: [wt] }
     } as unknown as Partial<AppState>)
 
     store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
@@ -226,14 +254,18 @@ describe('worktree remote runtime mutations', () => {
     })
 
     expect(store.getState().worktreesByRepo.repo1[0]?.linkedPR).toBeNull()
-    expect(fetchPRForBranch).toHaveBeenCalledWith('/repos/orca', 'feature/pr-link', {
-      force: true,
+    expect(readHostedReview).toHaveBeenCalledWith({
+      repoPath: '/repos/orca',
+      branch: 'feature/pr-link',
       repoId: 'repo1',
-      worktreeId: wt.id,
-      linkedPRNumber: null,
-      fallbackPRNumber: null,
-      fallbackPRSource: 'explicit',
-      reason: 'active'
+      active: true,
+      repoOwnerExecutionHostId: 'local',
+      currentHeadOid: wt.head,
+      linkedGitHubPR: null,
+      linkedGitLabMR: null,
+      linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
+      linkedGiteaPR: null
     })
     for (let i = 0; i < 6; i++) {
       await Promise.resolve()
@@ -242,16 +274,20 @@ describe('worktree remote runtime mutations', () => {
     expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
       worktreeId: wt.id,
       executionHostId: 'local',
-      updates: { linkedPR: 42, suppressedGitHubPR: null }
+      updates: expect.objectContaining({
+        linkedItems: [{ provider: 'github', type: 'pr', number: 42 }],
+        linkedPR: 42,
+        suppressedGitHubPR: null
+      })
     })
   })
 
   it('does not persist a terminal PR URL when the linked PR changes before branch confirmation resolves', async () => {
     const store = createTestStore()
-    let resolveLookup: (value: { number: number } | null) => void = () => {}
-    const fetchPRForBranch = vi.fn(
+    let resolveLookup: (value: HostedReviewInfo | null) => void = () => {}
+    installReviewRead().mockImplementation(
       () =>
-        new Promise<{ number: number } | null>((resolve) => {
+        new Promise<HostedReviewInfo | null>((resolve) => {
           resolveLookup = resolve
         })
     )
@@ -269,8 +305,7 @@ describe('worktree remote runtime mutations', () => {
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
-      worktreesByRepo: { repo1: [wt] },
-      fetchPRForBranch
+      worktreesByRepo: { repo1: [wt] }
     } as unknown as Partial<AppState>)
 
     store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
@@ -284,7 +319,7 @@ describe('worktree remote runtime mutations', () => {
       worktreesByRepo: { repo1: [{ ...wt, linkedPR: 7 }] }
     } as Partial<AppState>)
 
-    resolveLookup({ number: 42 })
+    resolveLookup(confirmedReview(42))
     for (let i = 0; i < 6; i++) {
       await Promise.resolve()
     }
@@ -295,7 +330,7 @@ describe('worktree remote runtime mutations', () => {
 
   it('does not persist a terminal PR URL when the linked PR changes while push target lookup resolves', async () => {
     const store = createTestStore()
-    const fetchPRForBranch = vi.fn().mockResolvedValue({ number: 42 })
+    installReviewRead().mockResolvedValue(confirmedReview(42))
     let resolvePushTarget: (value: {
       baseBranch: string
       pushTarget: { remoteName: string; branchName: string }
@@ -319,8 +354,7 @@ describe('worktree remote runtime mutations', () => {
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
-      worktreesByRepo: { repo1: [wt] },
-      fetchPRForBranch
+      worktreesByRepo: { repo1: [wt] }
     } as unknown as Partial<AppState>)
 
     store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
@@ -356,7 +390,7 @@ describe('worktree remote runtime mutations', () => {
 
   it('does not link an arbitrary same-repo terminal PR URL for a known push target when lookup misses', async () => {
     const store = createTestStore()
-    const fetchPRForBranch = vi.fn().mockResolvedValue(null)
+    installReviewRead().mockResolvedValue(null)
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -372,8 +406,7 @@ describe('worktree remote runtime mutations', () => {
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
-      worktreesByRepo: { repo1: [wt] },
-      fetchPRForBranch
+      worktreesByRepo: { repo1: [wt] }
     } as unknown as Partial<AppState>)
 
     store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
@@ -393,9 +426,9 @@ describe('worktree remote runtime mutations', () => {
     })
   })
 
-  it('uses branch confirmation before linking a differently named terminal PR URL', async () => {
+  it('rejects a same-number branch result for a different repository URL', async () => {
     const store = createTestStore()
-    const fetchPRForBranch = vi.fn().mockResolvedValue({ number: 42 })
+    const readHostedReview = installReviewRead().mockResolvedValue(confirmedReview(42))
     const wt = makeWorktree({
       id: 'repo1::/path/wt1',
       repoId: 'repo1',
@@ -407,8 +440,7 @@ describe('worktree remote runtime mutations', () => {
       repos: [
         { id: 'repo1', path: '/repos/orca', displayName: 'orca', badgeColor: '#000', addedAt: 0 }
       ],
-      worktreesByRepo: { repo1: [wt] },
-      fetchPRForBranch
+      worktreesByRepo: { repo1: [wt] }
     } as unknown as Partial<AppState>)
 
     store.getState().observeTerminalGitHubPullRequestLink(wt.id, {
@@ -418,24 +450,24 @@ describe('worktree remote runtime mutations', () => {
     })
 
     expect(store.getState().worktreesByRepo.repo1[0]?.linkedPR).toBeNull()
-    expect(fetchPRForBranch).toHaveBeenCalledWith('/repos/orca', 'feature/pr-link', {
-      force: true,
+    expect(readHostedReview).toHaveBeenCalledWith({
+      repoPath: '/repos/orca',
+      branch: 'feature/pr-link',
       repoId: 'repo1',
-      worktreeId: wt.id,
-      linkedPRNumber: null,
-      fallbackPRNumber: null,
-      fallbackPRSource: 'explicit',
-      reason: 'active'
+      active: true,
+      repoOwnerExecutionHostId: 'local',
+      currentHeadOid: wt.head,
+      linkedGitHubPR: null,
+      linkedGitLabMR: null,
+      linkedBitbucketPR: null,
+      linkedAzureDevOpsPR: null,
+      linkedGiteaPR: null
     })
 
     for (let i = 0; i < 6; i++) {
       await Promise.resolve()
     }
 
-    expect(mockApi.worktrees.updateMeta).toHaveBeenCalledWith({
-      worktreeId: wt.id,
-      executionHostId: 'local',
-      updates: { linkedPR: 42, suppressedGitHubPR: null }
-    })
+    expect(mockApi.worktrees.updateMeta).not.toHaveBeenCalled()
   })
 })
