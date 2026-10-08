@@ -55,7 +55,7 @@ export function getEditorFileDropOperationContext(
 
 export type EditorFileDropDestination = {
   worktreeId: string
-  /** When omitted, files open in this workspace's active editor group. */
+  /** When omitted, the store chooses this workspace's default editor destination. */
   groupId?: string
 }
 
