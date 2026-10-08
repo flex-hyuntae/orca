@@ -5943,6 +5943,7 @@
           "sleepWithDescendants": "Sleep with Descendants ({{value0}})",
           "sleepWithDescendantsDescription": "Close active panels in this workspace and every nested descendant to free up memory and CPU.",
           "deleteWithDescendants": "Delete with Descendants…",
+          "archiveOne": "Archive 1 Workspace",
           "archiveMany": "Archive {{value0}} Workspaces",
           "archive": "Archive",
           "archiveDescription": "Sleep and hide from the sidebar without deleting the worktree or branch. Restore it from Workspace options → Archived."
@@ -6651,6 +6652,8 @@
           "worktree": {
             "flow": {
               "failed": "Failed to archive workspace",
+              "failedMany": "Failed to archive {{value0}} workspaces",
+              "undoFailed": "Failed to undo archive",
               "archivedOne": "Workspace archived",
               "archivedMany": "{{value0}} workspaces archived",
               "restoreHint": "Restore it from Workspace options → Archived.",

@@ -2,6 +2,7 @@ import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { translate } from '@/i18n/i18n'
+import { hasWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import type { Worktree } from '../../../../shared/worktree/types'
 import { runSleepWorktrees } from './sleep-worktree-flow'
@@ -17,15 +18,53 @@ export function isArchivableWorktree(worktree: Worktree): boolean {
   )
 }
 
+type ArchiveWriteResult = { succeededIds: string[]; failedIds: string[] }
+
 async function setWorktreesArchived(
   worktreeIds: readonly string[],
   isArchived: boolean
-): Promise<string[]> {
+): Promise<ArchiveWriteResult> {
   const { updateWorktreeMeta } = useAppStore.getState()
   const results = await Promise.all(
-    worktreeIds.map(async (id) => ({ id, result: await updateWorktreeMeta(id, { isArchived }) }))
+    worktreeIds.map(async (id) => ({
+      id,
+      result: await updateWorktreeMeta(id, { isArchived })
+    }))
   )
-  return results.filter(({ result }) => result.ok).map(({ id }) => id)
+  return {
+    succeededIds: results.filter(({ result }) => result.ok).map(({ id }) => id),
+    failedIds: results.filter(({ result }) => !result.ok).map(({ id }) => id)
+  }
+}
+
+function reportArchiveFailures(failedIds: readonly string[]): void {
+  if (failedIds.length === 0) {
+    return
+  }
+  toast.error(
+    failedIds.length === 1
+      ? translate(
+          'auto.components.sidebar.archive.worktree.flow.failed',
+          'Failed to archive workspace'
+        )
+      : translate(
+          'auto.components.sidebar.archive.worktree.flow.failedMany',
+          'Failed to archive {{value0}} workspaces',
+          { value0: failedIds.length }
+        )
+  )
+}
+
+async function undoArchiveWorktrees(worktreeIds: readonly string[]): Promise<void> {
+  const { failedIds } = await setWorktreesArchived(worktreeIds, false)
+  if (failedIds.length > 0) {
+    toast.error(
+      translate(
+        'auto.components.sidebar.archive.worktree.flow.undoFailed',
+        'Failed to undo archive'
+      )
+    )
+  }
 }
 
 /**
@@ -37,25 +76,25 @@ export async function runArchiveWorktrees(worktreeIds: readonly string[]): Promi
     return
   }
   const { activeWorktreeId } = useAppStore.getState()
-  const commitFocus =
-    activeWorktreeId && worktreeIds.includes(activeWorktreeId)
-      ? prepareActiveWorktreeFocusAfterDelete(activeWorktreeId)
-      : null
-  const failedSleepIds = await runSleepWorktrees(worktreeIds)
-  const archivedIds = await setWorktreesArchived(
-    worktreeIds.filter((id) => !failedSleepIds.has(id)),
+  const archivingActiveId =
+    activeWorktreeId && worktreeIds.includes(activeWorktreeId) ? activeWorktreeId : null
+  const commitFocus = archivingActiveId
+    ? prepareActiveWorktreeFocusAfterDelete(archivingActiveId)
+    : null
+  await runSleepWorktrees(worktreeIds)
+  // Why: failed sleeps and workspaces the user reopened mid-batch are both awake; keep them visible.
+  const { succeededIds: archivedIds, failedIds } = await setWorktreesArchived(
+    worktreeIds.filter((id) => hasWorktreeSleepIntent(id)),
     true
   )
-  commitFocus?.()
+  if (archivingActiveId && archivedIds.includes(archivingActiveId)) {
+    commitFocus?.()
+  } else if (archivingActiveId && useAppStore.getState().activeWorktreeId === null) {
+    // Why: sleep cleared the selection, but the row is still visible since its archive write failed.
+    useAppStore.getState().setActiveWorktree(archivingActiveId)
+  }
+  reportArchiveFailures(failedIds)
   if (archivedIds.length === 0) {
-    if (failedSleepIds.size === 0) {
-      toast.error(
-        translate(
-          'auto.components.sidebar.archive.worktree.flow.failed',
-          'Failed to archive workspace'
-        )
-      )
-    }
     return
   }
   toast.success(
@@ -74,7 +113,7 @@ export async function runArchiveWorktrees(worktreeIds: readonly string[]): Promi
       action: {
         label: translate('auto.components.sidebar.archive.worktree.flow.undo', 'Undo'),
         onClick: () => {
-          void setWorktreesArchived(archivedIds, false)
+          void undoArchiveWorktrees(archivedIds)
         }
       }
     }
@@ -82,7 +121,9 @@ export async function runArchiveWorktrees(worktreeIds: readonly string[]): Promi
 }
 
 export async function runRestoreArchivedWorktree(worktreeId: string): Promise<void> {
-  const [restoredId] = await setWorktreesArchived([worktreeId], false)
+  const {
+    succeededIds: [restoredId]
+  } = await setWorktreesArchived([worktreeId], false)
   if (!restoredId) {
     toast.error(
       translate(

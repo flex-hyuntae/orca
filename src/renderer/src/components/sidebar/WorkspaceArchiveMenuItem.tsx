@@ -12,6 +12,23 @@ type WorkspaceArchiveMenuItemProps = {
   onMenuClose: () => void
 }
 
+function getArchiveMenuLabel(isMultiContext: boolean, archivableCount: number): string {
+  if (!isMultiContext || archivableCount === 0) {
+    return translate('auto.components.sidebar.WorktreeContextMenu.archive', 'Archive')
+  }
+  if (archivableCount === 1) {
+    return translate(
+      'auto.components.sidebar.WorktreeContextMenu.archiveOne',
+      'Archive 1 Workspace'
+    )
+  }
+  return translate(
+    'auto.components.sidebar.WorktreeContextMenu.archiveMany',
+    'Archive {{value0}} Workspaces',
+    { value0: archivableCount }
+  )
+}
+
 export function WorkspaceArchiveMenuItem({
   contextWorktrees,
   disabled,
@@ -40,13 +57,7 @@ export function WorkspaceArchiveMenuItem({
           disabled={disabled || archivableIds.length === 0}
         >
           <Archive className="size-3.5" />
-          {isMultiContext && archivableIds.length > 0
-            ? translate(
-                'auto.components.sidebar.WorktreeContextMenu.archiveMany',
-                'Archive {{value0}} Workspaces',
-                { value0: archivableIds.length }
-              )
-            : translate('auto.components.sidebar.WorktreeContextMenu.archive', 'Archive')}
+          {getArchiveMenuLabel(isMultiContext, archivableIds.length)}
         </DropdownMenuItem>
       </TooltipTrigger>
       <TooltipContent side="right" sideOffset={8} className="max-w-[220px]">
